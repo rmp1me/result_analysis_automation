@@ -1,7 +1,7 @@
 students = [
     {
-        "seat_no": "F500760335",
-        "student_name": "VELHAL AVINASH SANTOSH",
+        "seat_no": "*********",
+        "student_name": "****** ********",
 
         "AEC-101": 19,
         "BSC-101-BES_TH": [17, 35],   # INSEM, ENDSEM
@@ -16,8 +16,8 @@ students = [
         "sgpa": None
     },
     {
-        "seat_no": "F500760336",
-        "student_name": "PATIL RAHUL SANDEEP",
+        "seat_no": "*******",
+        "student_name": "******* ***** *******",
 
         "AEC-101": 15,
         "BSC-101-BES_TH": [20, 30],
@@ -32,3 +32,4 @@ students = [
         "sgpa": None
     }
 ]
+
