@@ -1,0 +1,34 @@
+students = [
+    {
+        "seat_no": "F500760335",
+        "student_name": "VELHAL AVINASH SANTOSH",
+
+        "AEC-101": 19,
+        "BSC-101-BES_TH": [17, 35],   # INSEM, ENDSEM
+        "BSC-101-BES_PR": 9,
+        "BSC-101-BES_TW": 14,
+        "BSC-102-BES-1_TH": 20,
+        "BSC-102-BES-1_PR": 23,
+
+        "credits_earned": 10,
+        "credits_total": 22,
+        "total_credit_points": 85,
+        "sgpa": None
+    },
+    {
+        "seat_no": "F500760336",
+        "student_name": "PATIL RAHUL SANDEEP",
+
+        "AEC-101": 15,
+        "BSC-101-BES_TH": [20, 30],
+        "BSC-101-BES_PR": 10,
+        "BSC-101-BES_TW": 12,
+        "BSC-102-BES-1_TH": 18,
+        "BSC-102-BES-1_PR": 20,
+
+        "credits_earned": 12,
+        "credits_total": 22,
+        "total_credit_points": 80,
+        "sgpa": None
+    }
+]
