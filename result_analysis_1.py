@@ -1,132 +1,166 @@
 import pdfplumber
 import re
-import pprint
 import pandas as pd
+import json
+import os
+import sys
+import numpy as np
 
-students = []
+from analysis_module import process_results
 
-pdf_path = r"C:\Users\Riyansh\Desktop\automation_work\FE_2024_ALL.pdf"
 
-with pdfplumber.open(pdf_path) as pdf:
-    for page_no, page in enumerate(pdf.pages, start=1):
-        text = page.extract_text()
-        if not text:
-            continue
+def result_analysis(pdf_path: str, subject_map: dict) -> None:
+    """
+    Extracts student-wise subject marks and semester summaries from an SPPU
+    result PDF and exports a processed Excel report.
 
-        # Extract seat number and student name
-        seat_match = re.search(r"SEAT NO\.:\s*([A-Z0-9]+)", text)
-        name_match = re.search(r"NAME:([A-Z\s]+?)\sMother", text)
+    Only subjects present in subject_map (loaded from subject.json)
+    are considered for mark extraction.
 
-        if not (seat_match and name_match):
-            continue
+    Args:
+        pdf_path (str): Absolute path to the result PDF file.
+        subject_map (dict): Dictionary of valid subject codes to subject names.
+                            Example: {"210241": "Discrete Mathematics", ...}
 
-        seat_no = seat_match.group(1)
-        student_name = name_match.group(1).strip()
+    Returns:
+        None
+    """
+    students = []
 
-        # Extract semester text
-        try:
-            sem_text = text.split("Semester : 1")[1]
-        except IndexError:
-            continue
-
-        student_dict = {
-            "SEAT NUMBER": seat_no,
-            "STUDENT NAME": student_name
-        }
-
-        # Extract subject marks
-        for line in sem_text.split("\n"):
-            if "SGPA" in line or "Result" in line:
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if not text:
                 continue
 
-            subj_match = re.match(r"([A-Z0-9\-]+(?:_[A-Z]+)?)", line)
-            # print(subj_match)
-            if not (subj_match and subj_match.group(1).startswith(("BSC", "ESC","PCC")) and not subj_match.group(1).endswith("_TW")):
+            # -------- Student identification --------
+            seat_match = re.search(r"SEAT NO\.:\s*([A-Z0-9]+)", text)
+            name_match = re.search(r"NAME:\s*([A-Z\s]+?)\sMother", text)
+
+            if not (seat_match and name_match):
                 continue
 
-            subject = subj_match.group(1)
-            rest_of_line = line[len(subject):].strip()
-            tokens = rest_of_line.split()
-            marks = []
+            student_dict = {
+                "SEAT NUMBER": seat_match.group(1),
+                "STUDENT NAME": name_match.group(1).strip()
+            }
 
-            for i, token in enumerate(tokens):
-                if i > 0 and tokens[i - 1] in ["P", "*"]:
-                    if token.isdigit():
-                        marks.append(int(token))
-                    else:
-                        marks.append(token)
+            # -------- Semester block extraction --------
+            sem_match = re.search(r"SEMESTER\s*:\s*[1-8]", text, re.IGNORECASE)
+            if not sem_match:
+                continue
 
-            if marks:
-                # If single mark, store as int, else as list
-                student_dict[subject] = marks if len(marks) > 1 else marks[0]
+            sem_text = text[sem_match.end():]
 
-        # Extract SGPA summary
-        matches = re.findall(
-                                r"(First|Second)\s+Semester\s+SGPA\s*:\s*([\d.]+|-----)\s*"
-                                r"Credits Earned/Total\s*:\s*(\d+)\s*/\s*(\d+)\s*"
-                                r"Total Credit Points\s*:\s*(\d+)",
-                                text,
-                                re.IGNORECASE
-                            )
+            # -------- Subject marks extraction --------
+            for line in sem_text.split("\n"):
+                line = line.strip()
+                if not line or "SGPA" in line or "Result" in line:
+                    continue
 
-        # student_dict = {}
+                subj_match = re.match(r"([A-Z0-9\-]+(?:_[A-Z]+)?)", line)
+                if not subj_match:
+                    continue
 
-        for sem, sgpa, earned, total, points in matches:
-            key = sem.lower()  # first / second
+                subject_code = subj_match.group(1)
 
-            student_dict[f"{key}_sgpa"] = None if sgpa == "-----" else float(sgpa)
-            student_dict[f"{key}_credits_earned"] = int(earned)
-            student_dict[f"{key}_credits_total"] = int(total)
-            student_dict[f"{key}_total_credit_points"] = int(points)
+                # Process ONLY subjects defined in subject.json
+                if subject_code not in subject_map:
+                    continue
+
+                rest_of_line = line[len(subject_code):].strip()
+                tokens = rest_of_line.split()
+
+                marks = []
+                for i, token in enumerate(tokens):
+                    if i == 12:
+                        break
+
+                    if i > 0 and tokens[i - 1] in {"P", "*"}:
+                        if token.isdigit():
+                            marks.append(int(token))
+                        elif token == "AAA":
+                            marks.append("AAA")
+                        else:
+                            clean = re.sub(r"\D", "", token)
+                            if clean:
+                                marks.append(int(clean))
+
+                if marks:
+                    if len(marks) == 1:
+                        marks = [marks[0], np.nan]
+                    student_dict[subject_code] = marks
+
+            # -------- SGPA & credit summary extraction --------
+            sgpa_matches = re.findall(
+                r"(First|Second|Third|Fourth)\s+Semester\s+SGPA\s*:\s*([\d.]+|-----)\s*"
+                r"Credits Earned/Total\s*:\s*(\d+)\s*/\s*(\d+)\s*"
+                r"Total Credit Points\s*:\s*(\d+)",
+                text,
+                re.IGNORECASE
+            )
+
+            for sem, sgpa, earned, total, points in sgpa_matches:
+                key = sem.lower()
+                student_dict[f"{key}_sgpa"] = None if sgpa == "-----" else float(sgpa)
+                student_dict[f"{key}_credits_earned"] = int(earned)
+                student_dict[f"{key}_credits_total"] = int(total)
+                student_dict[f"{key}_total_credit_points"] = int(points)
+
+            students.append(student_dict)
+
+    # -------- DataFrame creation & post-processing --------
+    df = pd.DataFrame(students)
+
+    if df.empty:
+        print("No student data extracted.")
+        return
+
+    df = process_results(df, subject_map)
+    df.to_excel("Processed_Results_Final_output_verified.xlsx", index=False)
 
 
-        students.append(student_dict)
+def resource_path(relative_path: str) -> str:
+    """
+    Resolves the absolute path of a resource file.
+    Supports PyInstaller packaged execution.
+   
+    Args:
+        relative_path (str): Relative file path.
 
-# Print JSON-like structure
-pprint.pprint(students, width=120)
+    Returns:
+        str: Absolute file path.
+    """
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
 
-# ---------------- Create DataFrame ----------------
-df = pd.DataFrame(students)
-new_order = [
-    "SEAT NUMBER",
-    "STUDENT NAME",
-
-    # Semester 1 subjects
-    "BSC-101-BES",
-    "BSC-102-BES-1",
-    "ESC-102-ELE-1",
-    "ESC-103-MEC-1",
-    "ESC-105-COM",
-    "BSC-103-BES-2",
-    "BSC-151-BES",
-    "ESC-101-ETC-2",
-    "ESC-104-CVL-2",
-    "PCC-151-ITT",
-
-    # Semester 2 subjects
-    "BSC-103-BES-1",
-    "ESC-101-ETC-1",
-    "ESC-104-CVL-1",
-    "BSC-102-BES-2",
-    "ESC-102-ELE-2",
-    "ESC-103-MEC-2",
-
-    # SGPA summary
-    "first_sgpa",
-    "first_credits_earned",
-    "first_credits_total",
-    "first_total_credit_points",
-
-    "second_sgpa",
-    "second_credits_earned",
-    "second_credits_total",
-    "second_total_credit_points"
-]
-df = df[new_order]
+    return os.path.join(base_path, relative_path)
 
 
-# Export to Excel
-output_file = r"FE_2024_Sem1_Result_1_out_final.xlsx"
-df.to_excel(output_file, index=False)
+def main() -> None:
+    """
+    Entry point of the result analysis script.
+    Loads subject.json, validates configuration, and
+    triggers PDF result processing.
+    """
+    try:
+        with open(resource_path("subject.json"), "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-print("Excel file created successfully:", output_file)
+        subject_map = data.get("SE") or data.get("TE") or data.get("BE")
+        if not subject_map:
+            raise KeyError("SE / TE / BE not found in subject.json")
+
+    except Exception as e:
+        print("ERROR: Unable to load subject.json")
+        print(e)
+        return
+
+    pdf_path = r"C:\Users\Riyansh\Desktop\automation_work\SE_2019_Computer Regular_9.pdf"
+    result_analysis(pdf_path, subject_map)
+
+
+if __name__ == "__main__":
+    main()
