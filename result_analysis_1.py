@@ -9,7 +9,7 @@ import numpy as np
 from analysis_module import process_results
 
 
-def result_analysis(pdf_path: str, subject_map: dict) -> None:
+def result_analysis(pdf_path: str, subject_map: dict,progress_callback=None) -> None:
     """
     Extracts student-wise subject marks and semester summaries from an SPPU
     result PDF and exports a processed Excel report.
@@ -108,7 +108,11 @@ def result_analysis(pdf_path: str, subject_map: dict) -> None:
                 student_dict[f"{key}_total_credit_points"] = int(points)
 
             students.append(student_dict)
+            
+            if progress_callback:
+                progress_callback(page.page_number, len(pdf.pages))
 
+   
     # -------- DataFrame creation & post-processing --------
     df = pd.DataFrame(students)
 
@@ -118,6 +122,8 @@ def result_analysis(pdf_path: str, subject_map: dict) -> None:
 
     df = process_results(df, subject_map)
     df.to_excel("Processed_Results_Final_output_verified.xlsx", index=False)
+    total_records = len(df)
+    return df,total_records
 
 
 def resource_path(relative_path: str) -> str:
@@ -162,5 +168,5 @@ def main() -> None:
     result_analysis(pdf_path, subject_map)
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
