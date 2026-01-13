@@ -145,27 +145,27 @@ def resource_path(relative_path: str) -> str:
     return os.path.join(base_path, relative_path)
 
 
-def main() -> None:
-    """
-    Entry point of the result analysis script.
-    Loads subject.json, validates configuration, and
-    triggers PDF result processing.
-    """
-    try:
-        with open(resource_path("subject.json"), "r", encoding="utf-8") as f:
-            data = json.load(f)
+# def main() -> None:
+#     """
+#     Entry point of the result analysis script.
+#     Loads subject.json, validates configuration, and
+#     triggers PDF result processing.
+#     """
+#     try:
+#         with open(resource_path("subject.json"), "r", encoding="utf-8") as f:
+#             data = json.load(f)
 
-        subject_map = data.get("SE") or data.get("TE") or data.get("BE")
-        if not subject_map:
-            raise KeyError("SE / TE / BE not found in subject.json")
+#         subject_map = data.get("SE") or data.get("TE") or data.get("BE")
+#         if not subject_map:
+#             raise KeyError("SE / TE / BE not found in subject.json")
 
-    except Exception as e:
-        print("ERROR: Unable to load subject.json")
-        print(e)
-        return
+#     except Exception as e:
+#         print("ERROR: Unable to load subject.json")
+#         print(e)
+#         return
 
-    pdf_path = r"C:\Users\Riyansh\Desktop\automation_work\SE_2019_Computer Regular_9.pdf"
-    result_analysis(pdf_path, subject_map)
+#     pdf_path = r"C:\Users\Riyansh\Desktop\automation_work\SE_2019_Computer Regular_9.pdf"
+#     result_analysis(pdf_path, subject_map)
 
 
 # if __name__ == "__main__":
