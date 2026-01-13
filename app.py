@@ -79,10 +79,11 @@ def select_pdf():
 root = Tk()
 root.title("SPPU Result Analyzer")
 
+
 # ----- SET LOGO HERE -----
-icon = PhotoImage(file="logo.png")   # after converting jfif → png
-root.iconphoto(True, icon)
+root.iconbitmap("logo.ico")
 # ----- END LOGO -----
+
 
 root.update_idletasks()
 
