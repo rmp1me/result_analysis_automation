@@ -3,7 +3,7 @@ import os
 from tkinter import Tk, Button, filedialog, messagebox
 from tkinter import ttk
 
-from result_analysis_1 import result_analysis
+from extractor import result_analysis
 
 
 def load_subject_map(class_name: str) -> dict:
