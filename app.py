@@ -2,7 +2,7 @@ import json
 import os
 from tkinter import Tk, Button, filedialog, messagebox
 from tkinter import ttk
-
+from tkinter import PhotoImage
 from extractor import result_analysis
 
 
@@ -78,6 +78,11 @@ def select_pdf():
 # -------- GUI --------
 root = Tk()
 root.title("SPPU Result Analyzer")
+
+# ----- SET LOGO HERE -----
+icon = PhotoImage(file="logo.png")   # after converting jfif → png
+root.iconphoto(True, icon)
+# ----- END LOGO -----
 
 root.update_idletasks()
 
