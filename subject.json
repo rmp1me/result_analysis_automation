@@ -6,11 +6,33 @@
     "210244": "Computer Graphics",
     "210245": "Digital Electronics and Logic Design",
     "207003": "Environmental Studies",
-
     "210252": "Mathematics III",
     "210253": "Data Structures and Algorithms",
     "210254": "Software Engineering",
     "210255": "Microprocessor",
     "210256": "Principles of Programming Languages"
+  },
+  "TE":{
+   "310241": "Database Management Systems",
+   "310242": "Theory of Computation",
+   "310243": "Systems Programming and Operating System",
+   "310244": "Computer Networks and Security",
+   "310245": "Elective I",
+   "310251": "Data Science and Big Data Analytics",
+   "310252": "Web Technology",
+   "310253": "Artificial Intelligence",
+   "310254": "Elective II"
+  },
+   "BE": {
+    "410241": "Design and Analysis of Algorithms",
+    "410242": "Machine Learning",
+    "410243": "Blockchain Technology",
+    "410244": "Elective III",
+    "410245": "Elective IV",
+    "410250": "High Performance Computing",
+    "410251": "Deep Learning",
+    "410252": "Elective V",
+    "410253": "Elective VI"
   }
+  
 }
