@@ -126,23 +126,23 @@ def result_analysis(pdf_path: str, subject_map: dict,progress_callback=None) -> 
     return df,total_records
 
 
-def resource_path(relative_path: str) -> str:
-    """
-    Resolves the absolute path of a resource file.
-    Supports PyInstaller packaged execution.
+# def resource_path(relative_path: str) -> str:
+#     """
+#     Resolves the absolute path of a resource file.
+#     Supports PyInstaller packaged execution.
    
-    Args:
-        relative_path (str): Relative file path.
+#     Args:
+#         relative_path (str): Relative file path.
 
-    Returns:
-        str: Absolute file path.
-    """
-    try:
-        base_path = sys._MEIPASS
-    except AttributeError:
-        base_path = os.path.abspath(".")
+#     Returns:
+#         str: Absolute file path.
+#     """
+#     try:
+#         base_path = sys._MEIPASS
+#     except AttributeError:
+#         base_path = os.path.abspath(".")
 
-    return os.path.join(base_path, relative_path)
+#     return os.path.join(base_path, relative_path)
 
 
 # def main() -> None:

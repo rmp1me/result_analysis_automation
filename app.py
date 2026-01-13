@@ -2,14 +2,34 @@ import json
 import os
 from tkinter import Tk, Button, filedialog, messagebox
 from tkinter import ttk
-from tkinter import PhotoImage
+# from tkinter import PhotoImage
 from extractor import result_analysis
+import sys
+
+
+def resource_path(relative_path: str) -> str:
+    """
+    Resolves the absolute path of a resource file.
+    Supports PyInstaller packaged execution.
+   
+    Args:
+        relative_path (str): Relative file path.
+
+    Returns:
+        str: Absolute file path.
+    """
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 
 def load_subject_map(class_name: str) -> dict:
     try:
-        with open("subject.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
+        with open(resource_path("subject.json"), "r", encoding="utf-8") as f:
+             data = json.load(f)
     except FileNotFoundError:
         raise FileNotFoundError("subject.json not found")
     except json.JSONDecodeError:
@@ -81,7 +101,8 @@ root.title("SPPU Result Analyzer")
 
 
 # ----- SET LOGO HERE -----
-root.iconbitmap("logo.ico")
+root.iconbitmap(resource_path("logo.ico"))
+# root.iconbitmap("logo.ico")
 # ----- END LOGO -----
 
 
