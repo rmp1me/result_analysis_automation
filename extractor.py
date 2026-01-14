@@ -105,7 +105,7 @@ def result_analysis(pdf_path: str, subject_map: dict, progress_callback=None):
 
             students.append(student_dict)
 
-            # ✅ SAFE PROGRESS UPDATE
+            # SAFE PROGRESS UPDATE
             if progress_callback:
                 progress_callback(page_index, total_pages)
 
