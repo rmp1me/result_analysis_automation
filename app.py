@@ -1,7 +1,7 @@
 import json
 import os
 import sys
-import threading   # ✅ NEW
+import threading   
 from tkinter import Tk, Button, filedialog, messagebox
 from tkinter import ttk, PhotoImage
 from extractor import result_analysis
@@ -38,7 +38,7 @@ def load_subject_map(class_name: str) -> dict:
 def update_progress(current, total):
     percent = int((current / total) * 100)
 
-    # ✅ Always update GUI on main thread
+    #  Always update GUI on main thread
     root.after(0, lambda: progress.config(value=percent))
 
 
@@ -72,7 +72,7 @@ def select_pdf():
         subject_map = load_subject_map(class_name)
 
         # =================================================
-        # ✅ START BACKGROUND THREAD (NON-BLOCKING)
+        # START BACKGROUND THREAD (NON-BLOCKING)
         # =================================================
         threading.Thread(
             target=run_analysis,
@@ -94,7 +94,7 @@ def run_analysis(pdf_path, subject_map, class_name):
             progress_callback=update_progress
         )
 
-        # ✅ Send success back to GUI thread
+        #  Send success back to GUI thread
         root.after(0, lambda: on_success(class_name, total_records))
 
     except Exception as e:
