@@ -1,34 +1,31 @@
 import pdfplumber
 import re
 import pandas as pd
-import json
-import os
-import sys
 import numpy as np
 
 from analysis_module import process_results
 
 
-def result_analysis(pdf_path: str, subject_map: dict,progress_callback=None) -> None:
+def result_analysis(pdf_path: str, subject_map: dict, progress_callback=None):
     """
     Extracts student-wise subject marks and semester summaries from an SPPU
     result PDF and exports a processed Excel report.
 
-    Only subjects present in subject_map (loaded from subject.json)
-    are considered for mark extraction.
-
     Args:
         pdf_path (str): Absolute path to the result PDF file.
         subject_map (dict): Dictionary of valid subject codes to subject names.
-                            Example: {"210241": "Discrete Mathematics", ...}
+        progress_callback (callable, optional): Function to update progress.
+            Called as progress_callback(current, total)
 
     Returns:
-        None
+        tuple: (DataFrame, total_records)
     """
     students = []
 
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
+        total_pages = len(pdf.pages)
+
+        for page_index, page in enumerate(pdf.pages, start=1):
             text = page.extract_text()
             if not text:
                 continue
@@ -64,7 +61,6 @@ def result_analysis(pdf_path: str, subject_map: dict,progress_callback=None) -> 
 
                 subject_code = subj_match.group(1)
 
-                # Process ONLY subjects defined in subject.json
                 if subject_code not in subject_map:
                     continue
 
@@ -91,7 +87,7 @@ def result_analysis(pdf_path: str, subject_map: dict,progress_callback=None) -> 
                         marks = [marks[0], np.nan]
                     student_dict[subject_code] = marks
 
-            # -------- SGPA & credit summary extraction --------
+            # -------- SGPA & credit summary --------
             sgpa_matches = re.findall(
                 r"(First|Second|Third|Fourth)\s+Semester\s+SGPA\s*:\s*([\d.]+|-----)\s*"
                 r"Credits Earned/Total\s*:\s*(\d+)\s*/\s*(\d+)\s*"
@@ -108,65 +104,19 @@ def result_analysis(pdf_path: str, subject_map: dict,progress_callback=None) -> 
                 student_dict[f"{key}_total_credit_points"] = int(points)
 
             students.append(student_dict)
-            
-            if progress_callback:
-                progress_callback(page.page_number, len(pdf.pages))
 
-   
+            # ✅ SAFE PROGRESS UPDATE
+            if progress_callback:
+                progress_callback(page_index, total_pages)
+
     # -------- DataFrame creation & post-processing --------
     df = pd.DataFrame(students)
 
     if df.empty:
-        print("No student data extracted.")
-        return
+        return df, 0
 
     df = process_results(df, subject_map)
-    df.to_excel("Processed_Results_Final_output_verified.xlsx", index=False)
-    total_records = len(df)
-    return df,total_records
+    df.to_excel("Processed_Results_Final_output_verified1111.xlsx", index=False)
 
-
-# def resource_path(relative_path: str) -> str:
-#     """
-#     Resolves the absolute path of a resource file.
-#     Supports PyInstaller packaged execution.
-   
-#     Args:
-#         relative_path (str): Relative file path.
-
-#     Returns:
-#         str: Absolute file path.
-#     """
-#     try:
-#         base_path = sys._MEIPASS
-#     except AttributeError:
-#         base_path = os.path.abspath(".")
-
-#     return os.path.join(base_path, relative_path)
-
-
-# def main() -> None:
-#     """
-#     Entry point of the result analysis script.
-#     Loads subject.json, validates configuration, and
-#     triggers PDF result processing.
-#     """
-#     try:
-#         with open(resource_path("subject.json"), "r", encoding="utf-8") as f:
-#             data = json.load(f)
-
-#         subject_map = data.get("SE") or data.get("TE") or data.get("BE")
-#         if not subject_map:
-#             raise KeyError("SE / TE / BE not found in subject.json")
-
-#     except Exception as e:
-#         print("ERROR: Unable to load subject.json")
-#         print(e)
-#         return
-
-#     pdf_path = r"C:\Users\Riyansh\Desktop\automation_work\SE_2019_Computer Regular_9.pdf"
-#     result_analysis(pdf_path, subject_map)
-
-
-# if __name__ == "__main__":
-#     main()
+    return df, len(df)
+    
