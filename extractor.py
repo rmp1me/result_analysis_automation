@@ -116,7 +116,7 @@ def result_analysis(pdf_path: str, subject_map: dict, progress_callback=None):
         return df, 0
 
     df = process_results(df, subject_map)
-    df.to_excel("Processed_Results_Final_output_verified1111.xlsx", index=False)
+    # df.to_excel("Processed_Results_Final_output_verified1111.xlsx", index=False)
 
     return df, len(df)
     
