@@ -1,15 +1,7 @@
-# -------------------------------
-# analysis_module.py (FINAL)
-# -------------------------------
-
 import pandas as pd
 import numpy as np
 import ast
 
-
-# =====================================================
-# LEGACY SUBJECT PARSER (NO RESULT LOGIC HERE)
-# =====================================================
 def evaluate_subject(marks):
     """
     Input  : [insem, endsem] OR string "[insem, endsem]"
@@ -31,7 +23,7 @@ def evaluate_subject(marks):
 
 
 # =====================================================
-# NORMALIZE SUBJECT COLUMNS (AUTO-DETECT LEGACY)
+# NORMALIZE SUBJECT COLUMNS 
 # =====================================================
 def normalize_subject_columns(df: pd.DataFrame, subject_map: dict) -> pd.DataFrame:
     """
@@ -294,3 +286,4 @@ def process_results(df: pd.DataFrame, subject_map: dict) -> pd.DataFrame:
         df.to_excel(writer, "Processed_Result", index=False)
 
     return df
+
