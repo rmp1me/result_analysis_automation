@@ -263,7 +263,7 @@ def get_top_5_rankers(df: pd.DataFrame) -> pd.DataFrame:
 # =====================================================
 # MAIN ENTRY (CALLED FROM extractor.py)
 # =====================================================
-def process_results(df: pd.DataFrame, subject_map: dict) -> pd.DataFrame:
+def process_results(df: pd.DataFrame, subject_map: dict,semester) -> pd.DataFrame:
     df = normalize_subject_columns(df, subject_map)
 
     subject_codes = list(subject_map.keys())
@@ -278,12 +278,12 @@ def process_results(df: pd.DataFrame, subject_map: dict) -> pd.DataFrame:
 
     overall_df = pd.DataFrame(overall.items(), columns=["Metric", "Value"])
 
-    with pd.ExcelWriter("Final_Result_Report_1001.xlsx", engine="xlsxwriter") as writer:
-        overall_df.to_excel(writer, "Overall_Result", index=False)
-        subject_df.to_excel(writer, "Subject_Wise_Result", index=False)
-        topper_df.to_excel(writer, "Subject_Toppers", index=False)
-        rank_df.to_excel(writer, "Top_5_Rankers", index=False)
-        df.to_excel(writer, "Processed_Result", index=False)
+    with pd.ExcelWriter(f"Final_Result_Report_{semester}.xlsx", engine="xlsxwriter") as writer:
+        overall_df.to_excel(writer, f"Overall_Result_{semester}", index=False)
+        subject_df.to_excel(writer, f"Subject_Wise_Result_{semester}", index=False)
+        topper_df.to_excel(writer, f"Subject_Toppers_{semester}", index=False)
+        rank_df.to_excel(writer, f"Top_5_Rankers_{semester}", index=False)
+        df.to_excel(writer, f"Processed_Result_{semester}", index=False)
 
     return df
 

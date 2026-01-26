@@ -1,11 +1,22 @@
 import json
 import os
 import sys
-import threading   
-from tkinter import Tk, Button, filedialog, messagebox
+import threading
+import tkinter as tk
+from tkinter import filedialog, messagebox
 from tkinter import ttk, PhotoImage
 from extractor import result_analysis
 
+# ---------------- APP STATE ----------------
+app_state = {}
+
+# NEW: CLASS → SEMESTER MAPPING 
+CLASS_SEM_MAP = {
+    "FE": ["Sem I", "Sem II"],
+    "SE": ["Sem III", "Sem IV"],
+    "TE": ["Sem V", "Sem VI"],
+    "BE": ["Sem VII", "Sem VIII"]
+}
 
 # ---------------- RESOURCE PATH (EXE SAFE) ----------------
 def resource_path(relative_path: str) -> str:
@@ -16,42 +27,47 @@ def resource_path(relative_path: str) -> str:
     return os.path.join(base_path, relative_path)
 
 
-# ---------------- LOAD SUBJECT MAP ----------------
-def load_subject_map(class_name: str) -> dict:
-    try:
-        with open(resource_path("subject.json"), "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        raise FileNotFoundError("subject.json not found")
-    except json.JSONDecodeError:
-        raise ValueError("subject.json is not valid JSON")
+# ---------------- LOAD SUBJECT MAP (CLASS + SEMESTER) ----------------
+def load_subject_map(class_name: str, semester: str) -> dict:
+    with open(resource_path("subject.json"), "r", encoding="utf-8") as f:
+        data = json.load(f)
 
     class_name = class_name.upper()
 
-    if class_name in data:
-        return data[class_name]
+    try:
+        return data[class_name][semester]
+    except KeyError:
+        raise ValueError(f"No subjects found for {class_name} - {semester}")
 
-    raise ValueError(f"Class {class_name} not found in subject.json")
 
-
-# ---------------- PROGRESS CALLBACK (GUI SAFE) ----------------
+# ---------------- PROGRESS CALLBACK ----------------
 def update_progress(current, total):
     percent = int((current / total) * 100)
-
-    #  Always update GUI on main thread
     root.after(0, lambda: progress.config(value=percent))
 
 
-# ---------------- EXTRACT CLASS ----------------
-def extract_class_from_filename(pdf_path: str) -> str:
-    file_name = os.path.basename(pdf_path)
-    name = file_name.split(".")[0]
-    class_name = name.split("_")[0]
-    return class_name.upper()
+# NEW: CLASS CHANGE HANDLER 
+def on_class_change(event):
+    selected_class = class_var.get()
+    sem_cb["values"] = CLASS_SEM_MAP.get(selected_class, [])
+    semester_var.set("Select Semester")
 
 
 # ---------------- BUTTON HANDLER ----------------
 def select_pdf():
+    selected_class = class_var.get()
+    selected_sem = semester_var.get()
+
+    if selected_class == "Select Class" or selected_sem == "Select Semester":
+        messagebox.showwarning(
+            "Input Required",
+            "Please select Class and Semester"
+        )
+        return
+
+    app_state["class"] = selected_class
+    app_state["semester"] = selected_sem
+
     pdf_path = filedialog.askopenfilename(
         title="Select SPPU Result PDF",
         filetypes=[("PDF Files", "*.pdf")]
@@ -64,19 +80,14 @@ def select_pdf():
     progress["value"] = 0
 
     try:
-        class_name = extract_class_from_filename(pdf_path)
+        subject_map = load_subject_map(
+            app_state["class"],
+            app_state["semester"]
+        )
 
-        if class_name not in ("FE", "SE", "TE", "BE"):
-            raise ValueError("Invalid file name format. Class not found.")
-
-        subject_map = load_subject_map(class_name)
-
-        # =================================================
-        # START BACKGROUND THREAD (NON-BLOCKING)
-        # =================================================
         threading.Thread(
             target=run_analysis,
-            args=(pdf_path, subject_map, class_name),
+            args=(pdf_path, subject_map, app_state["class"],app_state["semester"]),
             daemon=True
         ).start()
 
@@ -85,81 +96,141 @@ def select_pdf():
         upload_btn.config(state="normal")
 
 
-# ---------------- BACKGROUND WORKER (THREAD) ----------------
-def run_analysis(pdf_path, subject_map, class_name):
+# ---------------- BACKGROUND WORKER ----------------
+def run_analysis(pdf_path, subject_map, class_name,semester):
     try:
-        df, total_records = result_analysis(
+        _, total_records = result_analysis(
             pdf_path,
             subject_map,
+            semester,
             progress_callback=update_progress
         )
-
-        #  Send success back to GUI thread
         root.after(0, lambda: on_success(class_name, total_records))
-
     except Exception as e:
         root.after(0, lambda: on_error(str(e)))
 
 
-# ---------------- GUI SUCCESS HANDLER ----------------
+# ---------------- SUCCESS HANDLER ----------------
 def on_success(class_name, total_records):
     progress["value"] = 100
 
     messagebox.showinfo(
-        "Success",
-        f"Result processed successfully!\n\n"
+        "Processing Completed",
+        f"Result processed successfully.\n\n"
         f"Class: {class_name}\n"
+        f"Semester: {app_state['semester']}\n"
         f"Total Records: {total_records}"
     )
 
-    root.after(500, root.destroy)
+    upload_btn.config(state="normal")
+    root.destroy()
 
 
-# ---------------- GUI ERROR HANDLER ----------------
+# ---------------- ERROR HANDLER ----------------
 def on_error(msg):
     messagebox.showerror("Error", msg)
     upload_btn.config(state="normal")
 
 
 # ================= GUI =================
-root = Tk()
-root.title("SPPU Result Analyzer")
+root = tk.Tk()
+root.title("Late G.N. Sapkal College of Engineering,Nashik")
 
-# -------- ICON (EXE SAFE) --------
-icon_path = resource_path("logo.png")
-icon = PhotoImage(file=icon_path)
-root.iconphoto(True, icon)
-# --------------------------------
+icon_img = PhotoImage(file=resource_path("logo.png"))
+root.iconphoto(True, icon_img)
 
-# Center window
-window_width = 420
-window_height = 230
+WINDOW_W = 550
+WINDOW_H = 315
 
-screen_width = root.winfo_screenwidth()
-screen_height = root.winfo_screenheight()
+screen_w = root.winfo_screenwidth()
+screen_h = root.winfo_screenheight()
+x = (screen_w - WINDOW_W) // 2
+y = (screen_h - WINDOW_H) // 2
 
-x = (screen_width - window_width) // 2
-y = (screen_height - window_height) // 2
+root.geometry(f"{WINDOW_W}x{WINDOW_H}+{x}+{y}")
+root.resizable(False, False)
 
-root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+container = ttk.Frame(root, padding=15)
+container.pack(fill="both", expand=True)
 
-# Upload button
-upload_btn = Button(
-    root,
+LEFT_BAR_WIDTH = 200
+left_frame = ttk.Frame(container, width=LEFT_BAR_WIDTH)
+left_frame.pack(side="left", fill="y", padx=(0, 15))
+left_frame.pack_propagate(False)
+
+try:
+    side_img = PhotoImage(file=resource_path("side.png"))
+    ttk.Label(left_frame, image=side_img).place(relx=0.5, rely=0.5, anchor="center")     
+    
+except:
+    pass
+
+right_frame = ttk.Frame(container)
+right_frame.pack(side="left", fill="both", expand=True)
+
+ttk.Label(
+    right_frame,
+    text="SPPU Result Analyzer",
+    font=("Segoe UI", 14, "bold")
+).pack(pady=(0, 6))
+
+ttk.Label(
+    right_frame,
+    text="Upload an SPPU result PDF to analyze and extract student records.",
+    foreground="#555",
+    wraplength=230,
+    justify="center"
+).pack(pady=(0, 15))
+
+# ================= CLASS & SEMESTER =================
+class_var = tk.StringVar(value="Select Class")
+semester_var = tk.StringVar(value="Select Semester")
+
+form_frame = ttk.Frame(right_frame)
+# form_frame.pack(pady=(0, 10))
+form_frame.pack(pady=(0, 10), anchor="center")
+
+ttk.Label(form_frame, text="Class:").grid(row=0, column=0, sticky="w", pady=4)
+
+#  UPDATED: bind class change 
+class_cb = ttk.Combobox(
+    form_frame,
+    textvariable=class_var,
+    values=["FE", "SE", "TE", "BE"],
+    state="readonly",
+    width=15
+)
+class_cb.grid(row=0, column=1, pady=4)
+class_cb.bind("<<ComboboxSelected>>", on_class_change)
+
+ttk.Label(form_frame, text="Semester:").grid(row=1, column=0, sticky="w", pady=4)
+
+# UPDATED: semester values removed 
+sem_cb = ttk.Combobox(
+    form_frame,
+    textvariable=semester_var,
+    state="readonly",
+    width=15
+)
+sem_cb.grid(row=1, column=1, pady=4)
+
+upload_btn = tk.Button(
+    right_frame,
     text="Upload Result PDF",
-    font=("Arial", 14),
+    font=("Segoe UI", 11, "bold"),
     width=20,
+    pady=6,
     command=select_pdf
 )
-upload_btn.pack(pady=20)
+upload_btn.pack(pady=(10, 10))
 
-# Progress bar
 progress = ttk.Progressbar(
-    root,
+    right_frame,
     orient="horizontal",
-    length=320,
+    length=300,
     mode="determinate"
 )
-progress.pack(pady=10)
+# progress.pack(pady=(0, 5))
+progress.pack(pady=(5, 0))
 
 root.mainloop()

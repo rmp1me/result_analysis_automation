@@ -2,25 +2,19 @@ import pdfplumber
 import re
 import pandas as pd
 import numpy as np
-
 from analysis_module import process_results
 
 
-def result_analysis(pdf_path: str, subject_map: dict, progress_callback=None):
-    """
-    Extracts student-wise subject marks and semester summaries from an SPPU
-    result PDF and exports a processed Excel report.
-
-    Args:
-        pdf_path (str): Absolute path to the result PDF file.
-        subject_map (dict): Dictionary of valid subject codes to subject names.
-        progress_callback (callable, optional): Function to update progress.
-            Called as progress_callback(current, total)
-
-    Returns:
-        tuple: (DataFrame, total_records)
-    """
+def result_analysis(pdf_path: str, subject_map: dict, semester, progress_callback=None):
     students = []
+
+    # Roman mapping (defined ONCE)
+    roman_map = {
+        1: "I", 2: "II", 3: "III", 4: "IV",
+        5: "V", 6: "VI", 7: "VII", 8: "VIII"
+    }
+
+    semester_found = False
 
     with pdfplumber.open(pdf_path) as pdf:
         total_pages = len(pdf.pages)
@@ -37,15 +31,22 @@ def result_analysis(pdf_path: str, subject_map: dict, progress_callback=None):
             if not (seat_match and name_match):
                 continue
 
+            # -------- Semester extraction (CORRECT) --------
+            sem_match = re.search(r"SEMESTER\s*:\s*([1-8])", text, re.IGNORECASE)
+            if not sem_match:
+                continue
+
+            sem_digit = int(sem_match.group(1))       # e.g. 3
+            pdf_sem = f"Sem {roman_map[sem_digit]}"  # Sem III
+
+            if pdf_sem != semester:
+                continue   # skip wrong semester pages
+
+            semester_found = True
             student_dict = {
                 "SEAT NUMBER": seat_match.group(1),
                 "STUDENT NAME": name_match.group(1).strip()
             }
-
-            # -------- Semester block extraction --------
-            sem_match = re.search(r"SEMESTER\s*:\s*[1-8]", text, re.IGNORECASE)
-            if not sem_match:
-                continue
 
             sem_text = text[sem_match.end():]
 
@@ -60,31 +61,39 @@ def result_analysis(pdf_path: str, subject_map: dict, progress_callback=None):
                     continue
 
                 subject_code = subj_match.group(1)
-
                 if subject_code not in subject_map:
                     continue
 
-                rest_of_line = line[len(subject_code):].strip()
-                tokens = rest_of_line.split()
-
+                tokens = line[len(subject_code):].split()
                 marks = []
-                for i, token in enumerate(tokens):
-                    if i == 12:
-                        break
 
-                    if i > 0 and tokens[i - 1] in {"P", "*"}:
-                        if token.isdigit():
-                            marks.append(int(token))
-                        elif token == "AAA":
-                            marks.append("AAA")
-                        else:
-                            clean = re.sub(r"\D", "", token)
-                            if clean:
-                                marks.append(int(clean))
+                # for i, token in enumerate(tokens):
+                #     if i == 12:
+                #         break
+                #     if i > 0 and tokens[i - 1] in {"P", "*"}:
+                #         if token.isdigit():
+                #             marks.append(int(token))
+                #         elif token == "AAA":
+                #             marks.append("AAA")
+                #         else:
+                #             token=token.replace("$", "")
+                #             if token.isdigit():
+                #                 marks.append(int(token))
+                for i, token in enumerate(tokens[:12]):
+                    if i == 0 or tokens[i - 1] not in {"P", "*"}:
+                        continue
 
+                    if token == "AAA":
+                        marks.append("AAA")
+                        continue
+
+                    clean_token = token.replace("$", "")
+                    if clean_token.isdigit():
+                        marks.append(int(clean_token))
+                            
                 if marks:
                     if len(marks) == 1:
-                        marks = [marks[0], np.nan]
+                        marks.append(np.nan)
                     student_dict[subject_code] = marks
 
             # -------- SGPA & credit summary --------
@@ -105,18 +114,16 @@ def result_analysis(pdf_path: str, subject_map: dict, progress_callback=None):
 
             students.append(student_dict)
 
-            # SAFE PROGRESS UPDATE
             if progress_callback:
                 progress_callback(page_index, total_pages)
 
-    # -------- DataFrame creation & post-processing --------
-    df = pd.DataFrame(students)
+    # -------- FINAL VALIDATION --------
+    if not semester_found:
+        raise ValueError("Selected semester does not match the uploaded PDF")
 
+    df = pd.DataFrame(students)
     if df.empty:
         return df, 0
 
-    df = process_results(df, subject_map)
-    # df.to_excel("Processed_Results_Final_output_verified1111.xlsx", index=False)
-
+    df = process_results(df, subject_map, semester)
     return df, len(df)
-    
