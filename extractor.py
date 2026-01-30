@@ -87,7 +87,7 @@ def result_analysis(pdf_path: str, subject_map: dict, semester, progress_callbac
                         marks.append("AAA")
                         continue
 
-                    clean_token = token.replace("$", "")
+                    clean_token = token.replace("$", "").replace("#","")
                     if clean_token.isdigit():
                         marks.append(int(clean_token))
                             
