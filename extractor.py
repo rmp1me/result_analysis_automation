@@ -1,129 +1,321 @@
-import pdfplumber
-import re
 import pandas as pd
 import numpy as np
-from analysis_module import process_results
+import ast
+import logging
 
 
-def result_analysis(pdf_path: str, subject_map: dict, semester, progress_callback=None):
-    students = []
+# -----------------------------------------------------
+# LOGGER (inherits config from main app / EXE)
+# -----------------------------------------------------
+logger = logging.getLogger(__name__)
 
-    # Roman mapping (defined ONCE)
-    roman_map = {
-        1: "I", 2: "II", 3: "III", 4: "IV",
-        5: "V", 6: "VI", 7: "VII", 8: "VIII"
+
+# =====================================================
+# SUBJECT EVALUATION
+# =====================================================
+def evaluate_subject(marks):
+    """
+    Input  : [insem, endsem] OR string "[insem, endsem]"
+    Output : insem, endsem
+    """
+    if marks is None or (isinstance(marks, str) and not marks.strip()):
+        return [np.nan, np.nan]
+
+    if isinstance(marks, str):
+        try:
+            marks = ast.literal_eval(marks)
+        except Exception:
+            return [np.nan, np.nan]
+
+    if not isinstance(marks, (list, tuple)) or len(marks) != 2:
+        return [np.nan, np.nan]
+
+    return marks[0], marks[1]
+
+
+# =====================================================
+# NORMALIZE SUBJECT COLUMNS
+# =====================================================
+def normalize_subject_columns(df: pd.DataFrame, subject_map: dict) -> pd.DataFrame:
+    if any(col.endswith("_INSEM") for col in df.columns):
+        return df
+
+    subject_codes = set(subject_map.keys())
+    subject_columns = [c for c in df.columns if str(c) in subject_codes]
+
+    if not subject_columns:
+        return df
+
+    tail_columns = [
+        c for c in df.columns
+        if "sgpa" in c.lower() or "credit" in c.lower()
+    ]
+
+    derived_columns = []
+
+    for subject in subject_columns:
+        expanded = df[subject].apply(evaluate_subject).to_list()
+
+        insem_col = f"{subject}_INSEM"
+        endsem_col = f"{subject}_ENDSEM"
+
+        df[[insem_col, endsem_col]] = pd.DataFrame(
+            expanded, index=df.index
+        )
+
+        derived_columns.extend([insem_col, endsem_col])
+
+    df.drop(columns=subject_columns, inplace=True)
+
+    base_columns = [
+        c for c in df.columns
+        if c not in derived_columns and c not in tail_columns
+    ]
+
+    return df[base_columns + derived_columns + tail_columns]
+
+
+# =====================================================
+# CLEAN MARKS COLUMN
+# =====================================================
+def clean_marks_column(df: pd.DataFrame, col_name: str) -> pd.Series:
+    return df[col_name].apply(
+        lambda x: "AAA" if str(x).strip().upper() == "AAA"
+        else pd.to_numeric(x, errors="coerce")
+    )
+
+
+# =====================================================
+# AUTO-DETECT RESULT COLUMN
+# =====================================================
+def get_result_column(df: pd.DataFrame, code: str):
+    for suffix in ["_RESULT", "_RESULT_CALC"]:
+        col = f"{code}{suffix}"
+        if col in df.columns:
+            return col
+    return None
+
+
+# =====================================================
+# STEP 1: ADD TOTAL COLUMNS
+# =====================================================
+def add_total_columns(df: pd.DataFrame, subject_codes: list) -> pd.DataFrame:
+    for code in subject_codes:
+        insem_col = f"{code}_INSEM"
+        endsem_col = f"{code}_ENDSEM"
+        total_col = f"{code}_TOTAL"
+
+        if insem_col not in df.columns and endsem_col not in df.columns:
+            continue
+
+        if insem_col in df.columns:
+            df[insem_col] = clean_marks_column(df, insem_col)
+        if endsem_col in df.columns:
+            df[endsem_col] = clean_marks_column(df, endsem_col)
+
+        total_vals = np.where(
+            (df.get(insem_col) == "AAA") & (df.get(endsem_col) == "AAA"),
+            np.nan,
+            pd.to_numeric(df.get(insem_col), errors="coerce").fillna(0)
+            + pd.to_numeric(df.get(endsem_col), errors="coerce").fillna(0)
+        )
+
+        if total_col in df.columns:
+            df.drop(columns=[total_col], inplace=True)
+
+        insert_after = endsem_col if endsem_col in df.columns else insem_col
+        idx = df.columns.get_loc(insert_after)
+        df.insert(idx + 1, total_col, total_vals)
+
+    return df
+
+
+# =====================================================
+# STEP 2: RESULT FIX
+# =====================================================
+def auto_fix_result_from_total(df: pd.DataFrame, subject_codes: list) -> pd.DataFrame:
+    for code in subject_codes:
+        insem_col = f"{code}_INSEM"
+        endsem_col = f"{code}_ENDSEM"
+        total_col = f"{code}_TOTAL"
+
+        if total_col not in df.columns or endsem_col not in df.columns:
+            continue
+
+        result_col = get_result_column(df, code)
+        if not result_col:
+            result_col = f"{code}_RESULT"
+            idx = df.columns.get_loc(total_col)
+            df.insert(idx + 1, result_col, np.nan)
+
+        df[result_col] = np.where(
+            (df[insem_col] == "AAA") & (df[endsem_col] == "AAA"),
+            "ABSENT",
+            np.where(
+                df[endsem_col] == "AAA",
+                "FAIL",
+                np.where(df[total_col] >= 40, "PASS", "FAIL")
+            )
+        )
+
+    return df
+
+
+# =====================================================
+# ANALYSIS FUNCTIONS
+# =====================================================
+def get_total_pass_fail(df: pd.DataFrame) -> dict:
+    result_cols = [c for c in df.columns if c.endswith("_RESULT")]
+
+    def is_all_pass(row):
+        vals = row[result_cols].dropna()
+        return len(vals) > 0 and (vals == "PASS").all()
+
+    total = len(df)
+    passed = df.apply(is_all_pass, axis=1).sum()
+
+    return {
+        "Total Appeared": total,
+        "Total Passed": passed,
+        "Total Failed": total - passed,
+        "Pass Percentage": round((passed / total) * 100, 2)
     }
 
-    semester_found = False
 
-    with pdfplumber.open(pdf_path) as pdf:
-        total_pages = len(pdf.pages)
+def get_subject_wise_result(df: pd.DataFrame, subject_map: dict) -> pd.DataFrame:
+    rows = []
 
-        for page_index, page in enumerate(pdf.pages, start=1):
-            text = page.extract_text()
-            if not text:
-                continue
+    for code, subject in subject_map.items():
+        result_col = get_result_column(df, code)
+        endsem_col = f"{code}_ENDSEM"
 
-            # -------- Student identification --------
-            seat_match = re.search(r"SEAT NO\.:\s*([A-Z0-9]+)", text)
-            name_match = re.search(r"NAME:\s*([A-Z\s]+?)\sMother", text)
+        if not result_col or endsem_col not in df.columns:
+            continue
 
-            if not (seat_match and name_match):
-                continue
+        appeared = (df[endsem_col] != "AAA").sum()
+        absent = (df[endsem_col] == "AAA").sum()
+        passed = (df[result_col] == "PASS").sum()
+        failed = (df[result_col] == "FAIL").sum()
 
-            # -------- Semester extraction (CORRECT) --------
-            sem_match = re.search(r"SEMESTER\s*:\s*([1-8])", text, re.IGNORECASE)
-            if not sem_match:
-                continue
+        rows.append({
+            "Subject": subject,
+            "Students Appeared": appeared,
+            "Students Passed": passed,
+            "Students Failed": failed,
+            "Students Absent": absent,
+            "% of Passing": round((passed / appeared) * 100, 2) if appeared else 0
+        })
 
-            sem_digit = int(sem_match.group(1))       # e.g. 3
-            pdf_sem = f"Sem {roman_map[sem_digit]}"  # Sem III
+    df_out = pd.DataFrame(rows)
+    df_out.insert(0, "Sr.No.", range(1, len(df_out) + 1))
+    return df_out
 
-            if pdf_sem != semester:
-                continue   # skip wrong semester pages
 
-            semester_found = True
-            student_dict = {
-                "SEAT NUMBER": seat_match.group(1),
-                "STUDENT NAME": name_match.group(1).strip()
-            }
+def get_subject_toppers(df: pd.DataFrame, subject_map: dict) -> pd.DataFrame:
+    rows = []
 
-            sem_text = text[sem_match.end():]
+    for code, subject in subject_map.items():
+        result_col = get_result_column(df, code)
+        total_col = f"{code}_TOTAL"
 
-            # -------- Subject marks extraction --------
-            for line in sem_text.split("\n"):
-                line = line.strip()
-                if not line or "SGPA" in line or "Result" in line:
+        if not result_col or total_col not in df.columns:
+            continue
+
+        passed_df = df[(df[result_col] == "PASS") & (df[total_col] >= 40)]
+        if passed_df.empty:
+            continue
+
+        max_marks = passed_df[total_col].max()
+        toppers = passed_df[passed_df[total_col] == max_marks]
+
+        for _, r in toppers.iterrows():
+            rows.append({
+                "Subject": subject,
+                "Seat Number": r["SEAT NUMBER"],
+                "Student Name": r["STUDENT NAME"],
+                "Marks": max_marks
+            })
+
+    return pd.DataFrame(rows)
+
+
+def get_top_5_rankers(df: pd.DataFrame) -> pd.DataFrame:
+    result_cols = [c for c in df.columns if c.endswith("_RESULT")]
+
+    def all_clear(row):
+        vals = row[result_cols].dropna()
+        return len(vals) > 0 and (vals == "PASS").all()
+
+    df_clear = df[df.apply(all_clear, axis=1)].copy()
+    if df_clear.empty:
+        return pd.DataFrame()
+
+    sgpa_cols = [c for c in df.columns if c.lower().endswith("_sgpa")]
+    df_clear["RANK_SCORE"] = df_clear[sgpa_cols].mean(axis=1, skipna=True)
+
+    df_clear = df_clear.sort_values("RANK_SCORE", ascending=False)
+    df_clear["Rank"] = range(1, len(df_clear) + 1)
+
+    cols = ["Rank", "SEAT NUMBER", "STUDENT NAME"] + sgpa_cols + ["RANK_SCORE"]
+    return df_clear.head(5)[[c for c in cols if c in df_clear.columns]]
+
+
+# =====================================================
+# MAIN ENTRY
+# =====================================================
+def process_results(df: pd.DataFrame, subject_map: dict, semester) -> pd.DataFrame:
+    df = normalize_subject_columns(df, subject_map)
+
+    subject_codes = list(subject_map.keys())
+    df = add_total_columns(df, subject_codes)
+    df = auto_fix_result_from_total(df, subject_codes)
+
+    overall = get_total_pass_fail(df)
+    subject_df = get_subject_wise_result(df, subject_map)
+    topper_df = get_subject_toppers(df, subject_map)
+    rank_df = get_top_5_rankers(df)
+
+    overall_df = pd.DataFrame(overall.items(), columns=["Metric", "Value"])
+
+    logger.info("Starting Excel report generation")
+
+    try:
+        with pd.ExcelWriter(
+            f"final_result_analysis_{semester}.xlsx",
+            engine="xlsxwriter"
+        ) as writer:
+
+            sheets = [
+                (df, f"Processed_Result_{semester}"),
+                (subject_df, f"Subject_Wise_Result_{semester}"),
+                (topper_df, f"Subject_Toppers_{semester}"),
+                (rank_df, f"Top_5_Rankers_{semester}"),
+                (overall_df, f"Overall_Result_{semester}")
+            ]
+
+            for dataframe, sheet in sheets:
+                if dataframe.empty:
+                    logger.warning(f"Skipping empty sheet: {sheet}")
                     continue
 
-                subj_match = re.match(r"([A-Z0-9\-]+(?:_[A-Z]+)?)", line)
-                if not subj_match:
-                    continue
+                dataframe.to_excel(
+                    excel_writer=writer,
+                    sheet_name=sheet,
+                    index=False
+                )
+                logger.info(f"Sheet written: {sheet}")
 
-                subject_code = subj_match.group(1)
-                if subject_code not in subject_map:
-                    continue
+        logger.info("Excel report generated successfully")
 
-                tokens = line[len(subject_code):].split()
-                marks = []
+    except PermissionError as e:
+        logger.error("Excel file is open or permission denied", exc_info=e)
+        raise RuntimeError(
+            "Excel file is open or permission denied. "
+            "Please close the file and try again."
+        )
 
-                # for i, token in enumerate(tokens):
-                #     if i == 12:
-                #         break
-                #     if i > 0 and tokens[i - 1] in {"P", "*"}:
-                #         if token.isdigit():
-                #             marks.append(int(token))
-                #         elif token == "AAA":
-                #             marks.append("AAA")
-                #         else:
-                #             token=token.replace("$", "")
-                #             if token.isdigit():
-                #                 marks.append(int(token))
-                for i, token in enumerate(tokens[:12]):
-                    if i == 0 or tokens[i - 1] not in {"P", "*"}:
-                        continue
+    except Exception as e:
+        logger.exception("Failed to write Excel report")
+        raise RuntimeError(f"Failed to write Excel report: {e}")
 
-                    if token == "AAA":
-                        marks.append("AAA")
-                        continue
-
-                    clean_token = token.replace("$", "").replace("#","")
-                    if clean_token.isdigit():
-                        marks.append(int(clean_token))
-                            
-                if marks:
-                    if len(marks) == 1:
-                        marks.append(np.nan)
-                    student_dict[subject_code] = marks
-
-            # -------- SGPA & credit summary --------
-            sgpa_matches = re.findall(
-                r"(First|Second|Third|Fourth)\s+Semester\s+SGPA\s*:\s*([\d.]+|-----)\s*"
-                r"Credits Earned/Total\s*:\s*(\d+)\s*/\s*(\d+)\s*"
-                r"Total Credit Points\s*:\s*(\d+)",
-                text,
-                re.IGNORECASE
-            )
-
-            for sem, sgpa, earned, total, points in sgpa_matches:
-                key = sem.lower()
-                student_dict[f"{key}_sgpa"] = None if sgpa == "-----" else float(sgpa)
-                student_dict[f"{key}_credits_earned"] = int(earned)
-                student_dict[f"{key}_credits_total"] = int(total)
-                student_dict[f"{key}_total_credit_points"] = int(points)
-
-            students.append(student_dict)
-
-            if progress_callback:
-                progress_callback(page_index, total_pages)
-
-    # -------- FINAL VALIDATION --------
-    if not semester_found:
-        raise ValueError("Selected semester does not match the uploaded PDF")
-
-    df = pd.DataFrame(students)
-    if df.empty:
-        return df, 0
-
-    df = process_results(df, subject_map, semester)
-    return df, len(df)
+    return df
