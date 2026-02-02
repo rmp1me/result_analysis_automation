@@ -1,11 +1,31 @@
 {
+  "FE": {
+    "Sem I": {
+      "BSC-101-BES": "Engineering Mathematics-I",
+      "BSC-102-BES": "Engineering Physics",
+      "BSC-103-BES": "Engineering Chemistry",
+      "ESC-101-ETC": "Basic Electronics Engineering",
+      "ESC-102-ELE": "Basic Electrical Engineering",
+      "ESC-103-MEC": "Engineering Graphics",
+      "ESC-104-CVL": "Engineering Mechanics",
+      "ESC-105-COM": "Fundamentals of Programming Languages"
+    },
+    "Sem II": {
+      "BSC-201-BES": "Engineering Mathematics-II",
+      "BSC-202-BES": "Engineering Physics-II",
+      "BSC-203-BES": "Engineering Chemistry-II",
+      "ESC-201-COM": "Programming and Problem Solving",
+      "ESC-202-MEC": "Engineering Graphics"
+    }
+  },
+
   "SE": {
     "Sem III": {
       "210241": "Discrete Mathematics",
       "210242": "Fundamentals of Data Structures",
       "210243": "Object Oriented Programming",
       "210244": "Computer Graphics",
-      "210245": "Digital Electronics and Logic Design"     
+      "210245": "Digital Electronics and Logic Design"
     },
     "Sem IV": {
       "210252": "Mathematics III",
@@ -15,7 +35,6 @@
       "210256": "Principles of Programming Languages"
     }
   },
-
   "TE": {
     "Sem V": {
       "310241": "Database Management Systems",
@@ -31,7 +50,6 @@
       "310254": "Elective II"
     }
   },
-
   "BE": {
     "Sem VII": {
       "410241": "Design and Analysis of Algorithms",
