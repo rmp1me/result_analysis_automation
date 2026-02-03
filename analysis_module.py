@@ -279,11 +279,11 @@ def process_results(df: pd.DataFrame, subject_map: dict,semester) -> pd.DataFram
     overall_df = pd.DataFrame(overall.items(), columns=["Metric", "Value"])
 
     with pd.ExcelWriter(f"Final_Result_Report_{semester}.xlsx", engine="xlsxwriter") as writer:
-        overall_df.to_excel(writer, f"Overall_Result_{semester}", index=False)
-        subject_df.to_excel(writer, f"Subject_Wise_Result_{semester}", index=False)
-        topper_df.to_excel(writer, f"Subject_Toppers_{semester}", index=False)
-        rank_df.to_excel(writer, f"Top_5_Rankers_{semester}", index=False)
-        df.to_excel(writer, f"Processed_Result_{semester}", index=False)
+        overall_df.to_excel(excel_writer=writer, sheet_name=f"Overall_Result_{semester}", index=False)
+        subject_df.to_excel(excel_writer=writer, sheet_name=f"Subject_Wise_Result_{semester}", index=False)
+        topper_df.to_excel(excel_writer=writer, sheet_name=f"Subject_Toppers_{semester}", index=False)
+        rank_df.to_excel(excel_writer=writer, sheet_name=f"Top_5_Rankers_{semester}", index=False)
+        df.to_excel(excel_writer=writer, sheet_name=f"Processed_Result_{semester}", index=False)
 
     return df
 
